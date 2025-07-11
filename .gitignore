@@ -1,0 +1,10 @@
+# Ignorer les environnements virtuels Python
+venv/
+.venv/
+
+# Ignorer le dossier contenant les opérations brutes (par sécurité)
+data/Operations/
+
+# Ignorer les fichiers système
+__pycache__/
+*.pyc
