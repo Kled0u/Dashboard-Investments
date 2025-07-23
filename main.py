@@ -24,17 +24,23 @@ def load_and_process_all_data():
         df_pea_value = pd.read_excel(pea_perf_file, usecols=[0, 1]); df_pea_value.columns = ['Date', 'PEA']
         df_pea_value['Date'] = pd.to_datetime(df_pea_value['Date']); df_pea_value.set_index('Date', inplace=True)
     except FileNotFoundError as e:
-        st.error(f"Fichier manquant : {e.filename}."); return None, None
+        st.error(f"Fichier manquant : {e.filename}."); return None, None, None
+        
     start_date = df_apports['Date'].min(); end_date = pd.to_datetime('today')
     date_range = pd.date_range(start_date, end_date, freq='D')
-    df_global_value = pd.DataFrame(index=date_range); df_global_value['PEA'] = df_pea_value['PEA'].reindex(date_range, method='ffill')
+    df_global_value = pd.DataFrame(index=date_range)
+    
     sources = df_apports['SourcePlacement'].unique()
+    df_global_value['PEA'] = df_pea_value['PEA'].reindex(date_range, method='ffill')
     for source in sources:
         if source.upper() != 'PEA':
             apports_source = df_apports[df_apports['SourcePlacement'] == source]
             inflows_source = apports_source.pivot_table(index='Date', values='Montant', aggfunc='sum')['Montant']
             df_global_value[source] = inflows_source.cumsum().reindex(date_range, method='ffill').fillna(0)
-    df_global_value.fillna(0, inplace=True); df_global_value['PortfolioValue_Global'] = df_global_value[sources].sum(axis=1)
+    df_global_value.fillna(0, inplace=True)
+
+    df_global_value['PortfolioValue_Global'] = df_global_value[sources].sum(axis=1)
+    
     df_final = df_global_value[['PortfolioValue_Global']].copy()
     daily_inflows_total = df_apports.pivot_table(index='Date', columns='NomInvestisseur', values='Montant', aggfunc='sum')
     df_final = df_final.join(daily_inflows_total).fillna(0)
@@ -95,15 +101,15 @@ selection = st.sidebar.radio(
 
 try:
     gross_data, df_apports, df_global_value = load_and_process_all_data()
-    if gross_data is not None:
+    if gross_data is not None and df_apports is not None and df_global_value is not None:
         if selection == "Analyse par Investisseur":
             final_data_net = apply_fees_and_taxes(gross_data, df_apports)
             onglet_investisseurs.display_tab(final_data_net, df_apports)
         
-        # --- LIGNE CORRIGÉE CI-DESSOUS ---
         elif selection == "Analyse de Portefeuille":
-            onglet_analyse.display_tab() # Appel de la fonction sans arguments
+            df_portfolio_history = df_global_value.reset_index().rename(columns={'index': 'Date'})
+            onglet_analyse.display_tab(df_portfolio_history)
 
 except Exception as e:
-    st.error(f"Une erreur critique est survenue.")
+    st.error(f"Une erreur critique est survenue lors du chargement ou du traitement des données.")
     st.exception(e)
